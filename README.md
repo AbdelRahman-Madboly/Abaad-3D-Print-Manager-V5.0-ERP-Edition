@@ -483,3 +483,7 @@ Social: @abaad3d
 ## License
 
 Private — internal business software. Not for redistribution.
+## Project Development Stages 
+- **Core**: Database and Models finalized. 
+- **Services**: Order and Inventory logic integrated. 
+- **UI**: Dashboard and Branding applied. 
