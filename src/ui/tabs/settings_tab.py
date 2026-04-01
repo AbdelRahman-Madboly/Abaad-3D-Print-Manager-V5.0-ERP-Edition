@@ -24,6 +24,8 @@ from src.core.config import (
 from src.services.finance_service import FinanceService
 from src.ui.theme import Colors, Fonts
 from src.utils.helpers import format_currency, safe_float
+from src.ui.context_menu import bind_treeview_menu
+
 
 
 class SettingsTab(ttk.Frame):

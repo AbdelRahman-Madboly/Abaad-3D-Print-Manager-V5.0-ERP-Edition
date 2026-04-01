@@ -16,6 +16,8 @@ from src.services.customer_service import CustomerService
 from src.services.inventory_service import InventoryService
 from src.ui.theme import Colors, Fonts
 from src.utils.helpers import format_currency, format_time_minutes
+from src.ui.context_menu import bind_treeview_menu
+
 
 
 class StatsTab(ttk.Frame):

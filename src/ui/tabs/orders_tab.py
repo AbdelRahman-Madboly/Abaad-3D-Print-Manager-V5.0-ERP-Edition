@@ -19,6 +19,8 @@ from src.core.models import Order, PrintItem
 from src.services.order_service import OrderService
 from src.ui.theme import Colors, Fonts
 from src.utils.helpers import format_currency, safe_float, safe_int
+from src.ui.context_menu import bind_treeview_menu
+
 
 
 class OrdersTab(ttk.Frame):
@@ -123,7 +125,15 @@ class OrdersTab(ttk.Frame):
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
 
         self._tree.bind("<<TreeviewSelect>>", self._on_select)
-        self._tree.bind("<Double-1>", lambda _: self._on_select(None))
+        bind_treeview_menu(self._tree, actions=[
+            ("✏️ Edit",            self._edit_current),
+            ("📋 Change Status",   self._change_status),
+            None,
+            ("📄 Generate Quote",    self._gen_quote),
+            ("🧾 Generate Receipt",  self._gen_receipt),
+            None,
+            ("🗑 Delete",           self._delete_order),
+        ])
 
         # ── Right panel ────────────────────────────────────────────────
         right = ttk.Frame(self)

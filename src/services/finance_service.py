@@ -289,7 +289,7 @@ class FinanceService:
     # Full Statistics  (used by StatsTab)
     # ==================================================================
 
-    def get_full_statistics(self) -> Statistics:
+    def get_full_statistics(self) -> dict:
         """Aggregate all business statistics into a ``Statistics`` object.
 
         Reads orders, spools, printers, failures, and expenses from the DB.
@@ -375,7 +375,19 @@ class FinanceService:
         # ---- Customers ----
         stats.total_customers = self._db.get_table_count("customers")
 
-        return stats
+        return {
+            "total_revenue":      stats.total_revenue,
+            "total_shipping":     stats.total_shipping,
+            "total_fees":         stats.total_payment_fees,
+            "total_rounding":     stats.total_rounding_loss,
+            "total_material":     stats.total_material_cost,
+            "total_electricity":  stats.total_electricity_cost,
+            "total_depreciation": stats.total_depreciation_cost,
+            "total_nozzle":       stats.total_nozzle_cost,
+            "gross_profit":       stats.gross_profit,
+            "total_weight":       stats.total_weight_printed,
+            "total_print_time":   stats.total_time_printed,
+        }
 
     def get_monthly_breakdown(self, months: int = 12) -> List[Dict]:
         """Return per-month revenue, cost, and profit for the last N months.

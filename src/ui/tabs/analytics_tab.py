@@ -18,6 +18,8 @@ from datetime import datetime, timedelta
 
 from src.services.finance_service import FinanceService
 from src.ui.theme import Colors, Fonts
+from src.ui.context_menu import bind_treeview_menu
+
 
 # Matplotlib is optional — graceful degradation
 try:

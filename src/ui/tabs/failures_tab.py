@@ -21,6 +21,8 @@ from src.services.finance_service import FinanceService
 from src.services.inventory_service import InventoryService
 from src.ui.theme import Colors, Fonts
 from src.utils.helpers import format_currency, format_time_minutes, safe_float
+from src.ui.context_menu import bind_treeview_menu
+
 
 
 class FailuresTab(ttk.Frame):
@@ -135,6 +137,9 @@ class FailuresTab(ttk.Frame):
         vsb.grid(row=0, column=1, sticky="ns")
 
         self._tree.bind("<<TreeviewSelect>>", self._on_select)
+        bind_treeview_menu(self._tree, actions=[
+            ("🗑 Delete", self._delete_failure),
+        ])
 
     def _build_summary(self) -> None:
         sf = ttk.LabelFrame(self, text="📊 Failure Summary", padding=8)

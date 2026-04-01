@@ -7,10 +7,9 @@ Keep this file under 60 lines — no business logic here.
 Boot sequence
 -------------
 1.  Bootstrap runtime directories
-2.  Apply API compatibility patches   ← must happen before any import of services
-3.  Open v4 JSON database (singleton)
-4.  Initialise auth manager
-5.  Login loop:
+2.  Open v5 SQLite database (singleton)
+3.  Initialise auth manager
+4.  Login loop:
       show LoginDialog → on success build services and open App
       on window close / logout → loop back to login
       on dialog cancel → exit
@@ -32,21 +31,17 @@ def main() -> None:
     from src.core.config import ensure_directories
     ensure_directories()
 
-    # 2. Patches — MUST come before service imports
-    from src.services._compat import apply_all_patches
-    apply_all_patches()
-
-    # 3. Database (v4 JSON, singleton)
+    # 2. Database (v5 SQLite, singleton)
     from src.core.database import DatabaseManager
-    db = DatabaseManager()
+    from src.core.config import DB_PATH
+    db = DatabaseManager(DB_PATH)
 
-    # 4. Auth
+    # 3. Auth
     from src.auth.auth_manager import get_auth_manager
     auth = get_auth_manager()
-    auth._load_from_json_fallback()   # load from data/users.json if present
-    auth._ensure_default_admin()
+    auth.initialise(db)
 
-    # 5. Login loop
+    # 4. Login loop
     while True:
         root = tk.Tk()
         root.withdraw()

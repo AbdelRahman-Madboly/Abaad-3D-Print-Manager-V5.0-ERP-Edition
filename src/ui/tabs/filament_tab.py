@@ -20,6 +20,8 @@ from src.core.config import TRASH_THRESHOLD_GRAMS
 from src.services.inventory_service import InventoryService
 from src.ui.theme import Colors, Fonts
 from src.utils.helpers import format_currency
+from src.ui.context_menu import bind_treeview_menu
+
 
 
 class FilamentTab(ttk.Frame):
@@ -142,6 +144,10 @@ class FilamentTab(ttk.Frame):
         vsb.grid(row=0, column=1, sticky="ns")
 
         self._tree.bind("<<TreeviewSelect>>", self._on_select)
+        bind_treeview_menu(self._tree, actions=[
+            ("✏️ Edit",          self._edit_spool),
+            ("🗑 Move to Trash",  self._move_to_trash),
+        ])
         self._tree.tag_configure("low",   background="#fff3cd")
         self._tree.tag_configure("trash", background="#f8d7da")
         self._tree.tag_configure("std",   background=Colors.CARD)

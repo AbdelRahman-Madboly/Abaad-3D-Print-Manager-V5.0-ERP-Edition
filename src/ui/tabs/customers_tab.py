@@ -18,6 +18,8 @@ from src.auth.permissions import Permission
 from src.services.customer_service import CustomerService
 from src.ui.theme import Colors, Fonts
 from src.utils.helpers import format_currency
+from src.ui.context_menu import bind_treeview_menu
+
 
 
 class CustomersTab(ttk.Frame):
@@ -97,7 +99,10 @@ class CustomersTab(ttk.Frame):
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
 
         self._tree.bind("<<TreeviewSelect>>", self._on_select)
-        self._tree.bind("<Double-1>", lambda _: self._edit_customer())
+        bind_treeview_menu(self._tree, actions=[
+            ("✏️ Edit",   self._edit_customer),
+            ("🗑 Delete", self._delete_customer),
+        ])
 
         # Buttons
         btn_frame = ttk.Frame(left)

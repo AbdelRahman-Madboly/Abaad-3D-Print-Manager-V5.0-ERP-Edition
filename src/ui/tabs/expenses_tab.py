@@ -19,6 +19,8 @@ from src.core.config import EXPENSE_CATEGORIES
 from src.services.finance_service import FinanceService
 from src.ui.theme import Colors, Fonts
 from src.utils.helpers import format_currency, safe_float
+from src.ui.context_menu import bind_treeview_menu
+
 
 
 _CATEGORY_ICONS = {
@@ -147,6 +149,10 @@ class ExpensesTab(ttk.Frame):
         vsb.grid(row=0, column=1, sticky="ns")
 
         self._tree.bind("<<TreeviewSelect>>", self._on_select)
+        bind_treeview_menu(self._tree, actions=[
+            ("✏️ Edit",   self._edit_expense),
+            ("🗑 Delete", self._delete_expense),
+        ])
 
     def _build_summary(self) -> None:
         sf = ttk.LabelFrame(self, text="📊 Expense Summary", padding=8)

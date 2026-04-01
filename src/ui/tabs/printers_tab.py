@@ -19,6 +19,8 @@ from src.auth.permissions import Permission
 from src.services.printer_service import PrinterService
 from src.ui.theme import Colors, Fonts
 from src.utils.helpers import format_currency, format_time_minutes
+from src.ui.context_menu import bind_treeview_menu
+
 
 
 class PrintersTab(ttk.Frame):
@@ -87,8 +89,10 @@ class PrintersTab(ttk.Frame):
         self._tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
         self._tree.bind("<<TreeviewSelect>>", self._on_select)
-
-        can_manage = self._user.has_permission(Permission.MANAGE_PRINTERS)
+        bind_treeview_menu(self._tree, actions=[
+            ("✏️ Edit",          self._edit_printer),
+            ("🔧 Reset Nozzle",  self._reset_nozzle),
+        ])
         btn_row = ttk.Frame(left)
         btn_row.pack(fill=tk.X, pady=(6, 0))
         ttk.Button(btn_row, text="➕ Add",

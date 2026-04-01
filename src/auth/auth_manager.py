@@ -3,15 +3,12 @@ src/auth/auth_manager.py
 ========================
 Authentication and session management for Abaad ERP v5.0.
 
-Changes from v4:
-- Users are now stored in SQLite (users table) instead of users.json
-- Falls back to JSON file if DB not yet initialised (migration window)
-- Singleton pattern preserved for global access via get_auth_manager()
+Bug B fix: _load_from_db() now calls self._db.get_all_users()
+           instead of the non-existent self._db.execute_query()
 
-Usage:
-    from src.auth.auth_manager import get_auth_manager, User
-    auth = get_auth_manager()
-    ok, msg, user = auth.login("admin", "admin123")
+Bug C fix: _save_user_to_db() now calls self._db.save_user(dict)
+           delete_user() now calls self._db.delete_user(id)
+           instead of the non-existent self._db.execute_update()
 """
 
 import hashlib
@@ -36,7 +33,6 @@ def _now_str() -> str:
 
 
 def _hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
-    """Return (hash, salt) for *password*.  Generates a new salt if none given."""
     if salt is None:
         salt = secrets.token_hex(16)
     digest = hashlib.sha256(f"{salt}{password}".encode()).hexdigest()
@@ -69,13 +65,8 @@ class User:
     login_count:   int  = 0
     notes:         str  = ""
 
-    # ------------------------------------------------------------------
-    # Permissions
-    # ------------------------------------------------------------------
-
     @property
     def permissions(self) -> List[Permission]:
-        """All permissions granted to this user's role."""
         try:
             role_enum = UserRole(self.role)
         except ValueError:
@@ -86,7 +77,6 @@ class User:
         return permission in self.permissions
 
     def can_access_tab(self, tab_name: str) -> bool:
-        """Return True if the user's role grants access to *tab_name*."""
         tab_map: Dict[str, Permission] = {
             "orders":    Permission.VIEW_ORDER,
             "customers": Permission.VIEW_CUSTOMERS,
@@ -104,10 +94,6 @@ class User:
             return True
         return self.has_permission(required)
 
-    # ------------------------------------------------------------------
-    # Password helpers
-    # ------------------------------------------------------------------
-
     def set_password(self, plain: str) -> None:
         self.password_hash, self.password_salt = _hash_password(plain)
 
@@ -117,10 +103,6 @@ class User:
     def record_login(self) -> None:
         self.last_login = _now_str()
         self.login_count += 1
-
-    # ------------------------------------------------------------------
-    # Serialisation
-    # ------------------------------------------------------------------
 
     def to_dict(self) -> dict:
         return {
@@ -161,24 +143,9 @@ class User:
 # ---------------------------------------------------------------------------
 
 class AuthManager:
-    """
-    Singleton that manages user accounts and the current login session.
-
-    Storage backend (v5):
-      - Primary: SQLite ``users`` table via DatabaseManager
-      - Fallback: JSON file at ``data/users.json`` (migration window only)
-
-    The *db* dependency is injected on first call to ``initialise(db)`` from
-    ``main.py`` after the database is ready.  Before initialisation the manager
-    silently falls back to the JSON file so the login dialog still works even
-    during first-run setup.
-    """
+    """Singleton that manages user accounts and the current login session."""
 
     _instance: Optional["AuthManager"] = None
-
-    # ------------------------------------------------------------------
-    # Singleton
-    # ------------------------------------------------------------------
 
     def __new__(cls) -> "AuthManager":
         if cls._instance is None:
@@ -189,7 +156,7 @@ class AuthManager:
     def __init__(self) -> None:
         if self._ready:
             return
-        self._db = None                        # injected later
+        self._db = None
         self._users: Dict[str, User] = {}
         self._current_user: Optional[User] = None
         self._json_fallback_loaded = False
@@ -200,30 +167,30 @@ class AuthManager:
     # ------------------------------------------------------------------
 
     def initialise(self, db) -> None:
-        """
-        Attach the SQLite DatabaseManager and load users from the DB.
-
-        Call once from main.py:
-            auth.initialise(db_manager)
-        """
+        """Attach the DatabaseManager and load users from the DB.
+        Call once from main.py after the database is ready."""
         self._db = db
         self._load_from_db()
         self._ensure_default_admin()
 
     def _load_from_db(self) -> None:
-        """Load all users from the SQLite users table."""
+        """Load all users from the SQLite users table.
+
+        BUG B FIX: calls self._db.get_all_users() (which exists in v5
+        DatabaseManager) instead of execute_query() (which does not).
+        """
         if self._db is None:
             return
         try:
-            rows = self._db.execute_query("SELECT * FROM users")
-            self._users = {r["id"]: User.from_dict(dict(r)) for r in rows}
+            rows = self._db.get_all_users()          # ← Bug B fix
+            self._users = {r["id"]: User.from_dict(r) for r in rows}
             print(f"✓ Auth: loaded {len(self._users)} users from DB")
         except Exception as exc:
             print(f"✗ Auth: could not load users from DB — {exc}")
             self._load_from_json_fallback()
 
     def _load_from_json_fallback(self) -> None:
-        """Load users from the legacy JSON file (migration / first-run)."""
+        """Load users from the legacy JSON file (first-run / migration)."""
         import json
         from pathlib import Path
         path = Path("data/users.json")
@@ -241,39 +208,20 @@ class AuthManager:
             print(f"✗ Auth: JSON fallback failed — {exc}")
 
     def _save_user_to_db(self, user: User) -> bool:
-        """Upsert a single user record into SQLite."""
+        """Upsert a single user record into SQLite.
+
+        BUG C FIX: calls self._db.save_user(dict) (which exists in v5
+        DatabaseManager) instead of execute_update() (which does not).
+        """
         if self._db is None:
             return False
         try:
-            sql = """
-                INSERT INTO users
-                    (id, username, password_hash, password_salt, role,
-                     display_name, email, is_active, created_date,
-                     last_login, login_count, notes)
-                VALUES
-                    (:id, :username, :password_hash, :password_salt, :role,
-                     :display_name, :email, :is_active, :created_date,
-                     :last_login, :login_count, :notes)
-                ON CONFLICT(id) DO UPDATE SET
-                    username      = excluded.username,
-                    password_hash = excluded.password_hash,
-                    password_salt = excluded.password_salt,
-                    role          = excluded.role,
-                    display_name  = excluded.display_name,
-                    email         = excluded.email,
-                    is_active     = excluded.is_active,
-                    last_login    = excluded.last_login,
-                    login_count   = excluded.login_count,
-                    notes         = excluded.notes
-            """
-            self._db.execute_update(sql, user.to_dict())
-            return True
+            return self._db.save_user(user.to_dict())   # ← Bug C fix
         except Exception as exc:
             print(f"✗ Auth: save user failed — {exc}")
             return False
 
     def _ensure_default_admin(self) -> None:
-        """Create the default admin account if no admin exists."""
         admins = [u for u in self._users.values() if u.role == UserRole.ADMIN.value]
         if admins:
             return
@@ -294,13 +242,6 @@ class AuthManager:
     # ------------------------------------------------------------------
 
     def login(self, username: str, password: str) -> tuple[bool, str, Optional[User]]:
-        """
-        Authenticate *username* with *password*.
-
-        Returns:
-            (success, message, user_or_None)
-        """
-        # Ensure we've tried to load users
         if not self._users:
             self._load_from_json_fallback()
             self._ensure_default_admin()
@@ -354,14 +295,10 @@ class AuthManager:
     # User management (admin-only)
     # ------------------------------------------------------------------
 
-    def create_user(
-        self,
-        username: str,
-        password: str,
-        role: str = UserRole.USER.value,
-        display_name: str = "",
-        email: str = "",
-    ) -> tuple[bool, str, Optional[User]]:
+    def create_user(self, username: str, password: str,
+                    role: str = UserRole.USER.value,
+                    display_name: str = "", email: str = "",
+                    ) -> tuple[bool, str, Optional[User]]:
         if not self.is_admin:
             return False, "Permission denied.", None
         if any(u.username.lower() == username.lower() for u in self._users.values()):
@@ -384,14 +321,11 @@ class AuthManager:
         user = self._users.get(user_id)
         if not user:
             return False, "User not found."
-
         for key in ("display_name", "email", "role", "is_active", "notes"):
             if key in kwargs:
                 setattr(user, key, kwargs[key])
-
         if kwargs.get("password"):
             user.set_password(kwargs["password"])
-
         self._save_user_to_db(user)
         return True, "User updated."
 
@@ -403,7 +337,6 @@ class AuthManager:
             return False, "User not found."
         if self._current_user and user_id == self._current_user.id:
             return False, "Cannot delete yourself."
-
         admins = [u for u in self._users.values() if u.role == UserRole.ADMIN.value]
         if user.role == UserRole.ADMIN.value and len(admins) <= 1:
             return False, "Cannot delete the last admin."
@@ -411,7 +344,7 @@ class AuthManager:
         del self._users[user_id]
         if self._db:
             try:
-                self._db.execute_update("DELETE FROM users WHERE id = ?", (user_id,))
+                self._db.delete_user(user_id)          # ← Bug C fix
             except Exception as exc:
                 print(f"✗ Auth: delete user DB error — {exc}")
         return True, "User deleted."
@@ -442,7 +375,6 @@ _auth_manager: Optional[AuthManager] = None
 
 
 def get_auth_manager() -> AuthManager:
-    """Return the application-wide AuthManager singleton."""
     global _auth_manager
     if _auth_manager is None:
         _auth_manager = AuthManager()
