@@ -32,15 +32,13 @@ def main() -> None:
     ensure_directories()
 
     # 2. Database (v5 SQLite, singleton)
-    from src.core.database import DatabaseManager
-    from src.core.config import DB_PATH
-    db = DatabaseManager(DB_PATH)
+    from src.core.database import get_database
+    db = get_database()
 
     # 3. Auth
     from src.auth.auth_manager import get_auth_manager
     auth = get_auth_manager()
     auth.initialise(db)
-
     # 4. Login loop
     while True:
         root = tk.Tk()

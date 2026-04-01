@@ -180,18 +180,26 @@ class FilamentTab(ttk.Frame):
 
     def _load_spools(self) -> None:
         filt = self._filter_var.get()
-        spools = self._svc.get_spools(status_filter=filt)
+        all_spools = self._svc.get_all_spools()
+        if filt == "active":
+            spools = [s for s in all_spools if s.is_active and s.status not in ("trash", "archived")]
+        elif filt == "low":
+            spools = [s for s in all_spools if s.status == "low"]
+        elif filt == "trash":
+            spools = [s for s in all_spools if s.status == "trash"]
+        else:
+            spools = all_spools
         self._tree.delete(*self._tree.get_children())
         for s in spools:
             tag = "low" if s.status == "low" else "trash" if s.status == "trash" else "std"
             self._tree.insert("", "end", iid=s.id, values=(
                 s.color,
                 s.brand or "—",
-                s.filament_type or "PLA",
+                s.filament_type or "PLA+",
                 s.category.capitalize(),
-                f"{s.current_weight:.1f}",
-                f"{s.pending_weight:.1f}",
-                f"{s.available_weight:.1f}",
+                f"{s.current_weight_grams:.1f}",
+                f"{s.pending_weight_grams:.1f}",
+                f"{s.available_weight_grams:.1f}",
                 f"{s.cost_per_gram:.2f}",
                 s.status.capitalize(),
             ), tags=(tag,))
@@ -203,13 +211,13 @@ class FilamentTab(ttk.Frame):
         info = self._svc.get_inventory_summary()
         self._sum_active.config(text=str(info.get("active_spools", 0)))
         self._sum_remaining.config(
-            text=f"{info.get('total_weight', 0):.0f} g")
+            text=f"{info.get('total_weight_g', 0):.0f} g")
         self._sum_pending.config(
-            text=f"{info.get('total_pending', 0):.0f} g")
+            text=f"{info.get('pending_weight_g', 0):.0f} g")
         self._sum_available.config(
-            text=f"{info.get('total_available', 0):.0f} g")
+            text=f"{info.get('available_weight_g', 0):.0f} g")
         self._sum_value.config(
-            text=format_currency(info.get("total_value", 0)))
+            text=format_currency(info.get("total_value_egp", 0)))
 
     def _sort(self, col: str) -> None:
         """Toggle sort on a column."""
@@ -239,7 +247,7 @@ class FilamentTab(ttk.Frame):
 
         spool = self._svc.get_spool(self._selected_id)
         show_trash = (can_manage and spool and
-                      spool.current_weight <= TRASH_THRESHOLD_GRAMS and
+                      spool.current_weight_grams <= TRASH_THRESHOLD_GRAMS and
                       spool.status not in ("trash", "archived"))
         self._btn_trash.config(state="normal" if show_trash else "disabled")
 
@@ -285,16 +293,16 @@ class FilamentTab(ttk.Frame):
             return
         if not messagebox.askyesno(
             "Move to Trash",
-            f"Move '{spool.color}' spool ({spool.current_weight:.1f}g remaining) to trash?\n"
+            f"Move '{spool.color}' spool ({spool.current_weight_grams:.1f}g remaining) to trash?\n"
             "This will archive it and record the wasted weight.",
         ):
             return
-        ok, msg = self._svc.move_to_trash(self._selected_id)
+        ok = self._svc.move_to_trash(self._selected_id)
         if ok:
             self.refresh()
             self._notify()
         else:
-            messagebox.showerror("Error", msg)
+            messagebox.showerror("Error", "Could not move spool to trash.")
 
     def _manage_colors(self) -> None:
         dlg = _ColorsDialog(self, service=self._svc)
@@ -353,7 +361,7 @@ class _SpoolDialog:
         # Weight (only editable for remaining or new standard)
         ttk.Label(f, text="Weight (g) *").grid(row=3, column=0, sticky="w", **pad)
         default_w = "1000" if self._category == "standard" else (
-            str(s.current_weight) if s else "")
+            str(s.current_weight_grams) if s else "")
         self._weight_var = tk.StringVar(value=default_w)
         state = "disabled" if (self._category == "standard" and not s) else "normal"
         ttk.Entry(f, textvariable=self._weight_var,
@@ -363,7 +371,7 @@ class _SpoolDialog:
         ttk.Label(f, text="Price (EGP)").grid(row=4, column=0, sticky="w", **pad)
         default_p = "840" if self._category == "standard" else "0"
         self._price_var = tk.StringVar(
-            value=str(s.price) if s else default_p)
+            value=str(s.purchase_price_egp) if s else default_p)
         price_state = "disabled" if self._category == "remaining" else "normal"
         ttk.Entry(f, textvariable=self._price_var,
                   state=price_state).grid(row=4, column=1, sticky="ew", **pad)
@@ -403,13 +411,13 @@ class _SpoolDialog:
             return
 
         self.result = {
-            "color":         color,
-            "brand":         self._brand_var.get().strip(),
-            "filament_type": self._type_var.get().strip(),
-            "category":      self._category,
-            "initial_weight": weight,
-            "price":         price,
-            "notes":         self._notes_var.get().strip(),
+            "color":                color,
+            "brand":                self._brand_var.get().strip(),
+            "filament_type":        self._type_var.get().strip(),
+            "category":             self._category,
+            "initial_weight_grams": weight,
+            "purchase_price_egp":   price,
+            "notes":                self._notes_var.get().strip(),
         }
         self._win.destroy()
 

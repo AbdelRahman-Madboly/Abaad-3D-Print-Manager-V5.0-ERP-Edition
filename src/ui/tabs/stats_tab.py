@@ -183,7 +183,7 @@ class StatsTab(ttk.Frame):
              format_time_minutes(int(stats.get("total_print_time", 0))))
         _set("production_active_spools", str(inv.get("active_spools", 0)))
         _set("production_available_filament",
-             f"{inv.get('total_available', 0):,.0f} g")
+             f"{inv.get('available_weight_g', 0):,.0f} g")
 
         # Failures
         _set("failures_failure_count",   str(f_stat.get("count", 0)))

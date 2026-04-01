@@ -95,6 +95,7 @@ class PrintersTab(ttk.Frame):
         ])
         btn_row = ttk.Frame(left)
         btn_row.pack(fill=tk.X, pady=(6, 0))
+        can_manage = self._user.has_permission(Permission.MANAGE_PRINTERS)
         ttk.Button(btn_row, text="➕ Add",
                    command=self._add_printer,
                    state="normal" if can_manage else "disabled").pack(

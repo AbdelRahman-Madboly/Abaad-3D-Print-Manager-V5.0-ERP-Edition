@@ -8,23 +8,12 @@
 │   └── Print3D_Manager.ico
 ├── data
 │   ├── backups
+│   │   └── .gitkeep
+│   ├── .gitkeep
 │   ├── abaad_v5.db
 │   └── users.json
-├── files
-│   ├── __init__.py
-│   ├── _compat.py
-│   ├── analytics_tab.py
-│   ├── auth_manager.py
-│   ├── customers_tab.py
-│   ├── expenses_tab.py
-│   ├── failures_tab.py
-│   ├── filament_tab.py
-│   ├── main.py
-│   ├── permissions.py
-│   ├── printers_tab.py
-│   ├── settings_tab.py
-│   └── stats_tab.py
 ├── scripts
+│   ├── install.py
 │   └── migrate_v4_to_v5.py
 ├── src
 │   ├── auth
@@ -33,13 +22,11 @@
 │   │   └── permissions.py
 │   ├── core
 │   │   ├── __init__.py
-│   │   ├── _model_aliases.py
 │   │   ├── config.py
 │   │   ├── database.py
 │   │   └── models.py
 │   ├── services
 │   │   ├── __init__.py
-│   │   ├── _compat.py
 │   │   ├── cura_service.py
 │   │   ├── customer_service.py
 │   │   ├── finance_service.py
@@ -65,16 +52,30 @@
 │   │   │   └── stats_tab.py
 │   │   ├── __init__.py
 │   │   ├── app.py
+│   │   ├── context_menu.py
 │   │   ├── theme.py
 │   │   └── widgets.py
 │   └── utils
 │       ├── __init__.py
 │       └── helpers.py
+├── tests
+│   ├── test_database.py
+│   ├── test_inventory_service.py
+│   ├── test_migration.py
+│   ├── test_models.py
+│   └── test_order_service.py
 ├── .gitignore
+├── FileTree.md
 ├── LICENSE
+├── Launch_App.bat
 ├── PROGRESS_TRACKER.md
 ├── README.md
-└── main.py
+├── SETUP.bat
+├── launch.sh
+├── main.py
+├── pyproject.toml
+├── requirements.txt
+└── setup.sh
 ```
 
 ---

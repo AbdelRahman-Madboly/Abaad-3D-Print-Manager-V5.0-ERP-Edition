@@ -169,7 +169,7 @@ class FailuresTab(ttk.Frame):
     def _load_failures(self) -> None:
         reason = self._reason_filter.get()
         source = self._source_filter.get()
-        failures = self._fin.get_failures(
+        failures = self._fin.get_all_failures(
             reason_filter=None if reason == "All" else reason,
             source_filter=None if source == "All" else source,
         )
@@ -243,11 +243,11 @@ class FailuresTab(ttk.Frame):
         if not messagebox.askyesno("Confirm Delete",
                                    "Delete this failure record?"):
             return
-        ok, msg = self._fin.delete_failure(self._selected_id)
+        ok = self._fin.delete_failure(self._selected_id)
         if ok:
             self.refresh()
         else:
-            messagebox.showerror("Error", msg)
+            messagebox.showerror("Error", "Could not delete failure record.")
 
 
 # ---------------------------------------------------------------------------

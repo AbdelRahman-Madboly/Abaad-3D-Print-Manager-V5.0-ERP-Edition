@@ -1,0 +1,28 @@
+# Abaad 3D Print Manager v5.0 — Python dependencies
+#
+# Required:
+#   reportlab      — PDF generation for quotes and receipts
+#
+# Optional (app works without these):
+#   Pillow         — image processing for Cura OCR feature
+#   pytesseract    — OCR engine wrapper (also needs Tesseract installed on system)
+#   matplotlib     — analytics charts in the Analytics tab
+#
+# Install all:
+#   pip install -r requirements.txt
+#
+# Install required only:
+#   pip install reportlab
+#
+# Note: pinned to versions with pre-built wheels for Python 3.13.
+# If you are on Python 3.10-3.12 these also work fine.
+
+# -- Required ------------------------------------------------------------------
+reportlab==4.4.1
+
+# -- Optional: Cura OCR -------------------------------------------------------
+Pillow==11.2.1
+pytesseract==0.3.13
+
+# -- Optional: Analytics charts -----------------------------------------------
+matplotlib==3.10.3

@@ -19,8 +19,6 @@ from src.core.config import EXPENSE_CATEGORIES
 from src.services.finance_service import FinanceService
 from src.ui.theme import Colors, Fonts
 from src.utils.helpers import format_currency, safe_float
-from src.ui.context_menu import bind_treeview_menu
-
 
 
 _CATEGORY_ICONS = {
@@ -149,10 +147,6 @@ class ExpensesTab(ttk.Frame):
         vsb.grid(row=0, column=1, sticky="ns")
 
         self._tree.bind("<<TreeviewSelect>>", self._on_select)
-        bind_treeview_menu(self._tree, actions=[
-            ("✏️ Edit",   self._edit_expense),
-            ("🗑 Delete", self._delete_expense),
-        ])
 
     def _build_summary(self) -> None:
         sf = ttk.LabelFrame(self, text="📊 Expense Summary", padding=8)
@@ -182,7 +176,7 @@ class ExpensesTab(ttk.Frame):
     def _load_expenses(self) -> None:
         cat   = self._cat_filter.get()
         month = self._month_filter.get()
-        expenses = self._fin.get_expenses(
+        expenses = self._fin.get_all_expenses(
             category_filter=None if cat == "All" else cat,
             month_filter=None if month == "All" else month,
         )
@@ -203,7 +197,7 @@ class ExpensesTab(ttk.Frame):
 
         # Populate month filter from data
         months = sorted(set(
-            ex.date[:7] for ex in self._fin.get_expenses()
+            ex.date[:7] for ex in self._fin.get_all_expenses()
             if ex.date and len(ex.date) >= 7
         ), reverse=True)
         self._month_cb["values"] = ["All"] + months
@@ -268,7 +262,10 @@ class ExpensesTab(ttk.Frame):
     def _edit_expense(self) -> None:
         if not self._selected_id:
             return
-        expense = self._fin.get_expense(self._selected_id)
+        expense = next(
+            (e for e in self._fin.get_all_expenses() if e.id == self._selected_id),
+            None,
+        )
         if not expense:
             return
         dlg = _ExpenseDialog(self, title="Edit Expense", expense=expense)
@@ -283,11 +280,11 @@ class ExpensesTab(ttk.Frame):
         if not messagebox.askyesno("Confirm Delete",
                                    "Delete this expense record?"):
             return
-        ok, msg = self._fin.delete_expense(self._selected_id)
+        ok = self._fin.delete_expense(self._selected_id)
         if ok:
             self.refresh()
         else:
-            messagebox.showerror("Error", msg)
+            messagebox.showerror("Error", "Could not delete expense.")
 
 
 # ---------------------------------------------------------------------------

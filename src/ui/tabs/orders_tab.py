@@ -373,6 +373,51 @@ class OrdersTab(ttk.Frame):
             self._current_order = order
             self._load_form(order)
 
+    def _edit_current(self) -> None:
+        """Load the selected order into the form for editing (context-menu action)."""
+        sel = self._tree.selection()
+        if not sel:
+            messagebox.showinfo("Info", "Select an order first.", parent=self)
+            return
+        order = self._svc.get_order(sel[0])
+        if order:
+            self._current_order = order
+            self._load_form(order)
+
+    def _change_status(self) -> None:
+        """Prompt to change the status of the selected order."""
+        if not self._current_order:
+            messagebox.showinfo("Info", "Select an order first.", parent=self)
+            return
+        dlg = tk.Toplevel(self)
+        dlg.title("Change Status")
+        dlg.resizable(False, False)
+        dlg.grab_set()
+        ttk.Label(dlg, text=f"Order #{self._current_order.order_number}",
+                  font=Fonts.BUTTON_BOLD).pack(padx=20, pady=(14, 4))
+        ttk.Label(dlg, text="New status:").pack()
+        var = tk.StringVar(value=self._current_order.status)
+        cb = ttk.Combobox(dlg, textvariable=var,
+                          values=ORDER_STATUSES, state="readonly", width=16)
+        cb.pack(padx=20, pady=6)
+
+        def _apply():
+            new_status = var.get()
+            if new_status == self._current_order.status:
+                dlg.destroy()
+                return
+            ok = self._svc.update_status(self._current_order.id, new_status)
+            if ok:
+                self._current_order.status = new_status
+                self.refresh()
+                self._notify()
+            dlg.destroy()
+
+        bf = ttk.Frame(dlg)
+        bf.pack(pady=(0, 12))
+        ttk.Button(bf, text="Apply", command=_apply).pack(side=tk.LEFT, padx=6)
+        ttk.Button(bf, text="Cancel", command=dlg.destroy).pack(side=tk.LEFT, padx=6)
+
     # ------------------------------------------------------------------
     # Form load / clear
     # ------------------------------------------------------------------

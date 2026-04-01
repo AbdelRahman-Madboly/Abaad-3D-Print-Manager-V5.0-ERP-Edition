@@ -308,12 +308,12 @@ class CustomersTab(ttk.Frame):
             "This cannot be undone. Orders linked to this customer will remain.",
         ):
             return
-        ok, msg = self._svc.delete_customer(self._selected_id)
+        ok = self._svc.delete_customer(self._selected_id)
         if ok:
             self.refresh()
             self._notify()
         else:
-            messagebox.showerror("Delete Failed", msg)
+            messagebox.showerror("Delete Failed", "Could not delete customer.")
 
 
 # ---------------------------------------------------------------------------
