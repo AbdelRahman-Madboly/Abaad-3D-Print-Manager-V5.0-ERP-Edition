@@ -349,6 +349,11 @@ class DatabaseManager:
 
     def save_order(self, order: dict) -> bool:
         """Insert or replace an order record."""
+        # customer_id is a nullable FK — empty string violates the constraint;
+        # convert it to None so SQLite stores NULL instead.
+        order = dict(order)
+        if not order.get("customer_id"):
+            order["customer_id"] = None
         cols = ", ".join(order.keys())
         placeholders = ", ".join(["?"] * len(order))
         sql = f"INSERT OR REPLACE INTO orders ({cols}) VALUES ({placeholders})"
