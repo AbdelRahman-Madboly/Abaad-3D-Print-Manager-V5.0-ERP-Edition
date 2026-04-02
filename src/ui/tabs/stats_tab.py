@@ -161,11 +161,11 @@ class StatsTab(ttk.Frame):
         _set("costs_depreciation",    format_currency(stats.get("total_depreciation", 0)))
         _set("costs_nozzle_cost",     format_currency(stats.get("total_nozzle", 0)))
         _set("costs_failures_cost",   format_currency(f_stat.get("total_cost", 0)))
-        _set("costs_total_expenses",  format_currency(e_stat.get("total", 0)))
+        _set("costs_total_expenses",  format_currency(e_stat.get("total_expenses", 0)))
 
         # Profit
         gross = stats.get("gross_profit", 0)
-        net   = gross - f_stat.get("total_cost", 0) - e_stat.get("total", 0)
+        net   = gross - f_stat.get("total_cost", 0) - e_stat.get("total_expenses", 0)
         rev   = stats.get("total_revenue", 0)
         margin = (net / rev * 100) if rev else 0
         orders = o_stat.get("delivered", 0) or 1
@@ -186,11 +186,11 @@ class StatsTab(ttk.Frame):
              f"{inv.get('available_weight_g', 0):,.0f} g")
 
         # Failures
-        _set("failures_failure_count",   str(f_stat.get("count", 0)))
+        _set("failures_failure_count",   str(f_stat.get("total_failures", 0)))
         _set("failures_filament_wasted",
-             f"{f_stat.get('total_filament', 0):.1f} g")
+             f"{f_stat.get('total_filament_wasted', 0):.1f} g")
         _set("failures_time_wasted",
-             format_time_minutes(int(f_stat.get("total_time", 0))))
+             format_time_minutes(int(f_stat.get("total_time_wasted", 0))))
         _set("failures_failure_cost",
              format_currency(f_stat.get("total_cost", 0)))
 

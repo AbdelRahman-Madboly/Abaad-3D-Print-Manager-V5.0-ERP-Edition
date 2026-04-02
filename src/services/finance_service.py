@@ -39,9 +39,24 @@ class FinanceService:
     # Expenses
     # ==================================================================
 
-    def get_all_expenses(self) -> List[Expense]:
-        """Return all expenses, newest first."""
-        return [Expense.from_dict(r) for r in self._db.get_all_expenses()]
+    def get_all_expenses(
+        self,
+        category_filter: Optional[str] = None,
+        month_filter: Optional[str] = None,
+    ) -> List[Expense]:
+        """Return expenses, newest first.
+
+        Args:
+            category_filter: If given, only return records with this category.
+            month_filter:    If given, only return records whose date starts
+                             with this string (e.g. "2024-03").
+        """
+        expenses = [Expense.from_dict(r) for r in self._db.get_all_expenses()]
+        if category_filter:
+            expenses = [e for e in expenses if e.category == category_filter]
+        if month_filter:
+            expenses = [e for e in expenses if e.date.startswith(month_filter)]
+        return expenses
 
     def add_expense(
         self,
@@ -155,9 +170,24 @@ class FinanceService:
     # Print Failures
     # ==================================================================
 
-    def get_all_failures(self) -> List[PrintFailure]:
-        """Return all failure records, newest first."""
-        return [PrintFailure.from_dict(r) for r in self._db.get_all_failures()]
+    def get_all_failures(
+        self,
+        reason_filter: Optional[str] = None,
+        source_filter: Optional[str] = None,
+    ) -> List[PrintFailure]:
+        """Return failure records, newest first.
+
+        Args:
+            reason_filter: If given, only return records with this reason.
+            source_filter: If given, only return records with this source.
+        """
+        rows = self._db.get_all_failures()
+        failures = [PrintFailure.from_dict(r) for r in rows]
+        if reason_filter:
+            failures = [f for f in failures if f.reason == reason_filter]
+        if source_filter:
+            failures = [f for f in failures if f.source == source_filter]
+        return failures
 
     def log_failure(
         self,
@@ -283,6 +313,22 @@ class FinanceService:
             "total_time_wasted":     sum(f.time_wasted_minutes for f in failures),
             "unresolved_count":      sum(1 for f in failures if not f.resolved),
             "by_reason":             dict(by_reason),
+        }
+
+    def get_order_stats(self) -> Dict:
+        """Return basic order counts grouped by status.
+
+        Returns:
+            Dict with keys: total, delivered, cancelled, rd.
+        """
+        from src.core.models import Order
+        rows = self._db.get_all_orders(include_deleted=False)
+        orders = [Order.from_dict(r) for r in rows]
+        return {
+            "total":     len(orders),
+            "delivered": sum(1 for o in orders if o.status == "Delivered"),
+            "cancelled": sum(1 for o in orders if o.status == "Cancelled"),
+            "rd":        sum(1 for o in orders if o.is_rd_project),
         }
 
     # ==================================================================

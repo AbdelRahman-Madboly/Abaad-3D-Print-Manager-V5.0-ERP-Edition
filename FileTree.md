@@ -65,6 +65,7 @@
 │   ├── test_models.py
 │   └── test_order_service.py
 ├── .gitignore
+├── BUG_REPORT_AND_FIX_PLAN.md
 ├── FileTree.md
 ├── LICENSE
 ├── Launch_App.bat

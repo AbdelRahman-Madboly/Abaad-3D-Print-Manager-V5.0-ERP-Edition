@@ -179,23 +179,23 @@ class FailuresTab(ttk.Frame):
                 fl.date[:10] if fl.date else "—",
                 fl.reason,
                 fl.source,
-                f"{fl.filament_wasted:.1f}",
-                format_time_minutes(fl.print_time_wasted),
-                format_currency(fl.material_cost),
+                f"{fl.filament_wasted_grams:.1f}",
+                format_time_minutes(fl.time_wasted_minutes),
+                format_currency(fl.filament_cost),
                 format_currency(fl.electricity_cost),
-                format_currency(fl.total_cost),
-                fl.notes or "—",
+                format_currency(fl.total_loss),
+                fl.description or "—",
             ))
         self._selected_id = None
         self._btn_del.config(state="disabled")
 
     def _update_summary(self) -> None:
         stats = self._fin.get_failure_stats()
-        self._sum_count.config(text=str(stats.get("count", 0)))
+        self._sum_count.config(text=str(stats.get("total_failures", 0)))
         self._sum_filament.config(
-            text=f"{stats.get('total_filament', 0):.1f} g")
+            text=f"{stats.get('total_filament_wasted', 0):.1f} g")
         self._sum_time.config(
-            text=format_time_minutes(int(stats.get("total_time", 0))))
+            text=format_time_minutes(int(stats.get("total_time_wasted", 0))))
         self._sum_cost.config(
             text=format_currency(stats.get("total_cost", 0)))
 
@@ -224,16 +224,16 @@ class FailuresTab(ttk.Frame):
 
     def _add_failure(self) -> None:
         colors = self._inv.get_colors()
-        spools = self._inv.get_spools(status_filter="active")
+        spools = self._inv.get_active_spools()
         dlg = _FailureDialog(self, colors=colors, spools=spools)
         if dlg.result:
-            data = dlg.result
+            data     = dlg.result.copy()
             spool_id = data.pop("spool_id", None)
             deduct   = data.pop("deduct_from_spool", False)
             self._fin.log_failure(**data)
             if deduct and spool_id:
-                self._inv.commit_filament(spool_id,
-                                          data.get("filament_wasted", 0))
+                grams = data.get("filament_wasted_grams", 0)
+                self._inv.commit_filament(spool_id, grams)
             self.refresh()
             self._notify()
 
@@ -410,15 +410,13 @@ class _FailureDialog:
             spool_id = getattr(self, "_spool_map", {}).get(lbl)
 
         self.result = {
-            "reason":            self._reason_var.get(),
-            "source":            self._source_var.get(),
-            "filament_wasted":   g,
-            "print_time_wasted": int(min_),
-            "material_cost":     mat,
-            "electricity_cost":  elec,
-            "total_cost":        mat + elec,
-            "notes":             self._notes_var.get().strip(),
-            "spool_id":          spool_id,
-            "deduct_from_spool": self._deduct_var.get(),
+            "reason":                self._reason_var.get(),
+            "source":                self._source_var.get(),
+            "item_name":             "",
+            "filament_wasted_grams": g,
+            "time_wasted_minutes":   int(min_),
+            "description":           self._notes_var.get().strip(),
+            "spool_id":              spool_id,
+            "deduct_from_spool":     self._deduct_var.get(),
         }
         self._win.destroy()

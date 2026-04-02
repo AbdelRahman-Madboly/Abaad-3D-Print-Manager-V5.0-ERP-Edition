@@ -189,10 +189,10 @@ class ExpensesTab(ttk.Frame):
                 ex.name,
                 format_currency(ex.amount),
                 ex.quantity,
-                format_currency(ex.total),
+                format_currency(ex.total_cost),
                 ex.supplier or "—",
                 "✅" if ex.is_recurring else "—",
-                ex.notes or "—",
+                ex.description or "—",
             ))
 
         # Populate month filter from data
@@ -209,12 +209,12 @@ class ExpensesTab(ttk.Frame):
     def _update_summary(self) -> None:
         stats = self._fin.get_expense_stats()
         self._sum_total.config(
-            text=format_currency(stats.get("total", 0)))
+            text=format_currency(stats.get("total_expenses", 0)))
         self._sum_month.config(
             text=format_currency(stats.get("this_month", 0)))
         self._sum_recurring.config(
             text=format_currency(stats.get("monthly_recurring", 0)))
-        self._sum_count.config(text=str(stats.get("count", 0)))
+        self._sum_count.config(text=str(stats.get("expense_count", 0)))
 
     def _sort(self, col: str) -> None:
         items = [(self._tree.set(iid, col), iid)
@@ -367,7 +367,7 @@ class _ExpenseDialog:
 
         # Notes
         ttk.Label(f, text="Notes").grid(row=8, column=0, sticky="w", **pad)
-        self._notes_var = tk.StringVar(value=ex.notes if ex else "")
+        self._notes_var = tk.StringVar(value=ex.description if ex else "")
         ttk.Entry(f, textvariable=self._notes_var, width=28).grid(
             row=8, column=1, sticky="ew", **pad)
 
@@ -414,15 +414,14 @@ class _ExpenseDialog:
             return
         qty = max(1, int(safe_float(self._qty_var.get()) or 1))
         self.result = {
-            "category":        self._cat_var.get(),
-            "name":            name,
-            "amount":          amount,
-            "quantity":        qty,
-            "total":           amount * qty,
-            "supplier":        self._supplier_var.get().strip(),
-            "is_recurring":    self._recurring_var.get(),
-            "recurring_period":self._period_var.get(),
-            "notes":           self._notes_var.get().strip(),
-            "date":            self._date_var.get().strip(),
+            "category":         self._cat_var.get(),
+            "name":             name,
+            "amount":           amount,
+            "quantity":         qty,
+            "supplier":         self._supplier_var.get().strip(),
+            "is_recurring":     self._recurring_var.get(),
+            "recurring_period": self._period_var.get(),
+            "description":      self._notes_var.get().strip(),
+            "date":             self._date_var.get().strip(),
         }
         self._win.destroy()
