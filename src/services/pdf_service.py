@@ -240,14 +240,8 @@ class PdfService:
         }
         if self._db is None:
             return base
-        setting_keys = [
-            "company_name", "company_subtitle", "company_phone",
-            "company_address", "company_tagline", "company_social",
-            "quote_deposit_pct", "quote_validity_days", "invoice_footer",
-        ]
         try:
-            rows = {r["key"]: r["value"]
-                    for r in self._db.get_settings_by_keys(setting_keys)}
+            rows = self._db.get_all_settings()
             if rows.get("company_name"):     base["name"]          = rows["company_name"]
             if rows.get("company_subtitle"): base["subtitle"]      = rows["company_subtitle"]
             if rows.get("company_phone"):    base["phone"]         = rows["company_phone"]
