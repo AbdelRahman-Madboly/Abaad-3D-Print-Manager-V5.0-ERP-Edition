@@ -4,7 +4,13 @@ src/ui/app.py
 Main application window for Abaad ERP v5.0.
 Assembles all tabs, header bar, status bar, keyboard shortcuts.
 
-Task 4.3 additions:
+Phase 2 changes:
+  - Header bar reads company_name from settings (falls back to config)
+  - Logo loaded from company_logo_path setting (falls back to LOGO_PATH)
+  - Status bar version label reads company_name from settings
+  - app_subtitle no longer hardcoded (used in login; not shown in main window)
+
+Task 4.3 additions (carried forward):
   • Global keyboard shortcuts (Ctrl+N, Ctrl+S, Ctrl+F, F5, Escape)
   • Status bar "Saved ✓" flash (2 s green → normal)
   • on_status_change callback now triggers the flash
@@ -13,11 +19,15 @@ Task 4.3 additions:
 import tkinter as tk
 from tkinter import ttk
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from src.auth.auth_manager import User
 from src.auth.permissions import Permission
-from src.core.config import APP_TITLE, APP_VERSION, LOGO_PATH, ICON_PATH
+from src.core.config import (
+    APP_TITLE, APP_VERSION, LOGO_PATH, ICON_PATH,
+    DEFAULT_SETTINGS,
+)
 from src.ui.theme import Colors, Fonts, setup_styles
 
 from src.ui.tabs.orders_tab    import OrdersTab
@@ -29,6 +39,33 @@ from src.ui.tabs.expenses_tab  import ExpensesTab
 from src.ui.tabs.stats_tab     import StatsTab
 from src.ui.tabs.analytics_tab import AnalyticsTab
 from src.ui.tabs.settings_tab  import SettingsTab
+
+
+def _resolve_logo(db) -> Path:
+    """Return effective logo path: custom setting → LOGO_PATH fallback."""
+    if db is None:
+        return LOGO_PATH
+    try:
+        rel = db.get_setting("company_logo_path", default="")
+        if rel:
+            from src.core.config import PROJECT_ROOT
+            candidate = PROJECT_ROOT / rel
+            if candidate.exists():
+                return candidate
+    except Exception:
+        pass
+    return LOGO_PATH
+
+
+def _get_company_name(db) -> str:
+    """Read company_name from settings with config fallback."""
+    fallback = DEFAULT_SETTINGS["company_name"]
+    if db is None:
+        return fallback
+    try:
+        return db.get_setting("company_name", default=fallback) or fallback
+    except Exception:
+        return fallback
 
 
 class App:
@@ -87,16 +124,19 @@ class App:
         hdr = tk.Frame(self._root, bg=Colors.BG_DARK, pady=8, padx=16)
         hdr.pack(fill=tk.X)
 
+        logo_path    = _resolve_logo(self._db)
+        company_name = _get_company_name(self._db)
+
         try:
             from PIL import Image, ImageTk
-            img = Image.open(str(LOGO_PATH)).resize((36, 36), Image.LANCZOS)
+            img = Image.open(str(logo_path)).resize((36, 36), Image.LANCZOS)
             self._logo_img = ImageTk.PhotoImage(img)
             tk.Label(hdr, image=self._logo_img,
                      bg=Colors.BG_DARK).pack(side=tk.LEFT, padx=(0, 8))
         except Exception:
             pass
 
-        tk.Label(hdr, text="Abaad ERP", bg=Colors.BG_DARK, fg="white",
+        tk.Label(hdr, text=company_name, bg=Colors.BG_DARK, fg="white",
                  font=Fonts.TITLE).pack(side=tk.LEFT)
         tk.Label(hdr, text=f"v{APP_VERSION}", bg=Colors.BG_DARK,
                  fg=Colors.TEXT_LIGHT, font=Fonts.SMALL).pack(
@@ -194,6 +234,8 @@ class App:
         bar = tk.Frame(self._root, bg=Colors.BG_DARK, pady=3)
         bar.pack(fill=tk.X, side=tk.BOTTOM)
 
+        company_name = _get_company_name(self._db)
+
         self._status_orders  = tk.Label(bar, bg=Colors.BG_DARK,
                                          fg=Colors.TEXT_LIGHT, font=Fonts.SMALL,
                                          padx=10)
@@ -209,10 +251,11 @@ class App:
         self._status_clock   = tk.Label(bar, bg=Colors.BG_DARK,
                                          fg=Colors.TEXT_LIGHT, font=Fonts.SMALL,
                                          padx=10)
-        self._status_version = tk.Label(bar,
-                                         text=f"Abaad ERP v{APP_VERSION}",
-                                         bg=Colors.BG_DARK, fg=Colors.TEXT_MUTED,
-                                         font=Fonts.SMALL, padx=10)
+        self._status_version = tk.Label(
+            bar,
+            text=f"{company_name} v{APP_VERSION}",
+            bg=Colors.BG_DARK, fg=Colors.TEXT_MUTED,
+            font=Fonts.SMALL, padx=10)
 
         sep = lambda: tk.Label(bar, text="|", bg=Colors.BG_DARK,
                                 fg=Colors.BORDER_DARK)
@@ -269,24 +312,13 @@ class App:
 
     def _bind_shortcuts(self) -> None:
         root = self._root
-
-        # Ctrl+N — new order (switch to Orders tab and call new_order)
         root.bind_all("<Control-n>", self._shortcut_new_order)
-
-        # Ctrl+S — save the current tab (if it exposes a .save() method)
         root.bind_all("<Control-s>", self._shortcut_save)
-
-        # Ctrl+F — focus search on the active tab
         root.bind_all("<Control-f>", self._shortcut_focus_search)
-
-        # F5 — refresh all tabs
-        root.bind_all("<F5>", self._shortcut_refresh_all)
-
-        # Escape — clear selection on active tab
-        root.bind_all("<Escape>", self._shortcut_escape)
+        root.bind_all("<F5>",        self._shortcut_refresh_all)
+        root.bind_all("<Escape>",    self._shortcut_escape)
 
     def _active_tab(self):
-        """Return the currently visible tab widget, or None."""
         try:
             idx = self._nb.index("current")
             return self._tab_refs[idx]
@@ -294,7 +326,6 @@ class App:
             return None
 
     def _shortcut_new_order(self, _event=None) -> None:
-        # Switch to Orders tab and start a new order
         self._nb.select(0)
         if hasattr(self._orders_tab, "new_order"):
             self._orders_tab.new_order()
@@ -309,12 +340,10 @@ class App:
     def _shortcut_focus_search(self, _event=None) -> None:
         tab = self._active_tab()
         if tab and hasattr(tab, "_search_var"):
-            # Focus the search Entry widget on this tab
             for child in tab.winfo_children():
                 self._find_and_focus_search(child)
 
     def _find_and_focus_search(self, widget) -> bool:
-        """Recursively find the first search Entry and focus it."""
         if isinstance(widget, ttk.Entry):
             widget.focus_set()
             return True
