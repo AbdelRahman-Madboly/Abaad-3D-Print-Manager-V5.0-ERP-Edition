@@ -9,7 +9,8 @@ Boot sequence
 1.  Bootstrap runtime directories
 2.  Open v5 SQLite database (singleton)
 3.  Initialise auth manager
-4.  Login loop:
+4.  First-run setup wizard (skipped if setup_complete == "1")
+5.  Login loop:
       show LoginDialog → on success build services and open App
       on window close / logout → loop back to login
       on dialog cancel → exit
@@ -39,13 +40,22 @@ def main() -> None:
     from src.auth.auth_manager import get_auth_manager
     auth = get_auth_manager()
     auth.initialise(db)
-    # 4. Login loop
+
+    # 4. First-run setup wizard (no-op if already completed)
+    _wizard_root = tk.Tk()
+    _wizard_root.withdraw()
+    from src.ui.dialogs.setup_wizard import run_setup_wizard_if_needed
+    run_setup_wizard_if_needed(db, _wizard_root)
+    _wizard_root.destroy()
+
+    # 5. Login loop
     while True:
         root = tk.Tk()
         root.withdraw()
 
         from src.ui.dialogs.login_dialog import LoginDialog
-        user = LoginDialog(root).result
+        dlg  = LoginDialog(root, db=db)
+        user = dlg.result
 
         if user is None:
             root.destroy()
