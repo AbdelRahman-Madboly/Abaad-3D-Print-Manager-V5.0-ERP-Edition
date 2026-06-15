@@ -9,8 +9,13 @@ Steps
 1. Check Python >= 3.10
 2. Create venv/ in project root
 3. Install requirements.txt into the venv
-4. Check for existing database and run migration if needed
+4. (Database is created automatically on first launch by DatabaseManager)
 5. Print success summary with launch instructions
+
+Phase 2 changes:
+  - Removed Step 4 "Database setup / migration" — the v5 SQLite database is
+    created automatically on first launch by DatabaseManager; no migration
+    script is needed for fresh installs.
 """
 
 import os
@@ -29,8 +34,6 @@ _RED    = "\033[31m"
 _YELLOW = "\033[33m"
 _BOLD   = "\033[1m"
 
-# Windows cmd/powershell enable VT processing only in newer builds.
-# Enable it if possible; fall back to plain text.
 if platform.system() == "Windows":
     try:
         import ctypes
@@ -57,35 +60,18 @@ def header(msg: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Project root — directory containing main.py (one level up from scripts/)
+# Project root
 # ---------------------------------------------------------------------------
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 VENV_DIR     = PROJECT_ROOT / "venv"
 REQS_FILE    = PROJECT_ROOT / "requirements.txt"
-DB_V5        = PROJECT_ROOT / "data" / "abaad_v5.db"
-DB_V4        = PROJECT_ROOT / "data" / "abaad_v4.db.json"
-MIGRATE_SCRIPT = PROJECT_ROOT / "scripts" / "migrate_v4_to_v5.py"
 
 IS_WINDOWS   = platform.system() == "Windows"
 DOWNLOAD_URL = "https://www.python.org/downloads/"
 
 
 def _find_venv_python() -> str:
-    """
-    Locate the Python executable inside the venv.
-
-    Standard layouts tried in order:
-      Windows : venv/Scripts/python.exe   (CPython installer)
-                venv/Scripts/python3.exe
-                venv/bin/python.exe        (MSYS2 / Git-Bash / Cygwin)
-                venv/bin/python
-      POSIX   : venv/bin/python
-                venv/bin/python3
-
-    Falls back to sys.executable (the Python running this script) if
-    nothing is found — pip will still work via  -m pip --prefix venv/.
-    """
     candidates = []
     if IS_WINDOWS:
         candidates = [
@@ -104,8 +90,6 @@ def _find_venv_python() -> str:
         if p.exists():
             return str(p)
 
-    # Last resort — use the running interpreter and install into the venv
-    # prefix.  Works because pip respects VIRTUAL_ENV / --prefix.
     return sys.executable
 
 
@@ -154,10 +138,12 @@ def install_requirements() -> None:
         sys.exit(1)
 
     python = _find_venv_python()
-    warn(f"Using Python: {python}") if python == sys.executable else ok(f"Venv Python: {python}")
+    if python == sys.executable:
+        warn(f"Using Python: {python}")
+    else:
+        ok(f"Venv Python: {python}")
 
     try:
-        # Upgrade pip quietly — ignore failures (pip may already be current)
         subprocess.call(
             [python, "-m", "pip", "install", "--upgrade", "pip"],
             stdout=subprocess.DEVNULL,
@@ -173,31 +159,13 @@ def install_requirements() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Step 4 — Database setup / migration
+# Step 4 — Database note (no action needed)
 # ---------------------------------------------------------------------------
 
-def setup_database() -> None:
-    header("Step 4 — Database setup")
-
-    if DB_V5.exists():
-        ok(f"v5 database already present at {DB_V5}")
-        return
-
-    if DB_V4.exists():
-        warn("v4 JSON database found — running migration to v5 SQLite …")
-        python = _find_venv_python()
-        try:
-            subprocess.check_call([python, str(MIGRATE_SCRIPT)])
-            ok("Migration completed successfully")
-        except subprocess.CalledProcessError as exc:
-            err(
-                f"Migration failed (exit code {exc.returncode}).\n"
-                f"   Run manually: python scripts/migrate_v4_to_v5.py\n"
-                f"   Or use --force flag: python scripts/migrate_v4_to_v5.py --force"
-            )
-            sys.exit(1)
-    else:
-        ok("Fresh install — database will be created on first launch")
+def note_database() -> None:
+    header("Step 4 — Database")
+    ok("The v5 SQLite database is created automatically on first launch — "
+       "no migration required.")
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +192,7 @@ def print_success() -> None:
 
     print()
     print(f"  Default login:  admin / admin123")
+    print(f"  {_YELLOW}⚠  Change the default password after first login!{_RESET}")
     print()
 
 
@@ -238,7 +207,7 @@ def main() -> None:
     check_python()
     create_venv()
     install_requirements()
-    setup_database()
+    note_database()
     print_success()
 
 
