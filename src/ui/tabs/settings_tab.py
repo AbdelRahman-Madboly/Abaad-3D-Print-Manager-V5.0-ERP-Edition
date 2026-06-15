@@ -6,26 +6,33 @@ Admin-only tab.
 
 Sections:
   1. Company Information — saved to settings table
-  2. Pricing Defaults — rate per gram, spool price
+  2. Pricing Defaults — rate per gram, spool price, currency symbol
   3. Quote / Invoice — deposit %, validity days
-  4. Data Management — backup, export CSV, import
+  4. Data Management — backup, export CSV
   5. About — app version, DB stats
+
+Phase 2 changes:
+  - Removed "📥 Import / Migrate v4" button and _import_v4() method (Task 5)
+  - Added currency_symbol field to Pricing section (Task 2)
+  - Added company_logo_path picker and app_subtitle to Company section (Tasks 3 & 4)
+  - _save_all() now batches into one save_all_settings() call (Task 7)
+  - Currency cache invalidated on save so format_currency() picks up new symbol
 """
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from datetime import datetime
+from pathlib import Path
+import shutil
 
 from src.core.config import (
     APP_NAME, APP_VERSION,
     DEFAULT_RATE_PER_GRAM, SPOOL_PRICE_FIXED,
-    DB_PATH,
+    DB_PATH, ASSETS_DIR, PROJECT_ROOT, DEFAULT_SETTINGS,
 )
 from src.services.finance_service import FinanceService
 from src.ui.theme import Colors, Fonts
 from src.utils.helpers import format_currency, safe_float
 from src.ui.context_menu import bind_treeview_menu
-
 
 
 class SettingsTab(ttk.Frame):
@@ -45,6 +52,7 @@ class SettingsTab(ttk.Frame):
         self._db     = db
         self._user   = user
         self._notify = on_status_change or (lambda: None)
+        self._pending_logo: Path | None = None   # user-picked logo path
 
         self._build_ui()
         self._load_settings()
@@ -64,7 +72,6 @@ class SettingsTab(ttk.Frame):
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
 
-        # Scrollable canvas
         canvas = tk.Canvas(self, bg=Colors.BG, highlightthickness=0)
         vsb = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=vsb.set)
@@ -91,7 +98,6 @@ class SettingsTab(ttk.Frame):
         self._build_data_section()
         self._build_about_section()
 
-        # Save button (sticky at bottom of inner)
         ttk.Button(self._inner, text="💾 Save All Settings",
                    command=self._save_all,
                    style="Accent.TButton").grid(
@@ -105,22 +111,35 @@ class SettingsTab(ttk.Frame):
         sec.grid(row=0, column=0, sticky="ew", pady=(0, 10), padx=4)
         sec.columnconfigure(1, weight=1)
 
-        fields = [
-            ("Company Name",   "company_name",    "Abaad"),
-            ("Subtitle",       "company_subtitle","3D Printing Services"),
-            ("Phone",          "company_phone",   "01070750477"),
-            ("Address",        "company_address", "Ismailia, Egypt"),
-            ("Tagline",        "company_tagline", "Quality 3D Printing Solutions"),
-            ("Social Handle",  "company_social",  "@abaad3d"),
+        text_fields = [
+            ("Company Name",   "company_name",     DEFAULT_SETTINGS["company_name"]),
+            ("App Subtitle",   "app_subtitle",     DEFAULT_SETTINGS["app_subtitle"]),
+            ("Subtitle",       "company_subtitle", DEFAULT_SETTINGS["company_subtitle"]),
+            ("Phone",          "company_phone",    DEFAULT_SETTINGS["company_phone"]),
+            ("Address",        "company_address",  DEFAULT_SETTINGS["company_address"]),
+            ("Tagline",        "company_tagline",  DEFAULT_SETTINGS["company_tagline"]),
+            ("Social Handle",  "company_social",   DEFAULT_SETTINGS["company_social"]),
         ]
         self._company_vars: dict = {}
-        for r, (label, key, default) in enumerate(fields):
+        for r, (label, key, default) in enumerate(text_fields):
             ttk.Label(sec, text=f"{label}:").grid(
                 row=r, column=0, sticky="w", padx=(0, 12), pady=3)
             var = tk.StringVar()
             ttk.Entry(sec, textvariable=var, width=40).grid(
                 row=r, column=1, sticky="ew", pady=3)
             self._company_vars[key] = (var, default)
+
+        # Logo picker row
+        logo_row = len(text_fields)
+        ttk.Label(sec, text="Logo File:").grid(
+            row=logo_row, column=0, sticky="w", padx=(0, 12), pady=3)
+        logo_frame = ttk.Frame(sec)
+        logo_frame.grid(row=logo_row, column=1, sticky="ew", pady=3)
+        self._logo_path_var = tk.StringVar()
+        ttk.Entry(logo_frame, textvariable=self._logo_path_var,
+                  width=30, state="readonly").pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(logo_frame, text="📂 Browse…",
+                   command=self._pick_logo).pack(side=tk.LEFT)
 
     # -- Pricing --
 
@@ -130,13 +149,16 @@ class SettingsTab(ttk.Frame):
         sec.grid(row=1, column=0, sticky="ew", pady=(0, 10), padx=4)
         sec.columnconfigure(1, weight=1)
 
+        currency_default = DEFAULT_SETTINGS["currency_symbol"]
         fields = [
-            ("Rate per gram (EGP)",    "default_rate_per_gram",
+            ("Currency Symbol",         "currency_symbol",
+             currency_default),
+            ("Rate per gram",           "default_rate_per_gram",
              str(DEFAULT_RATE_PER_GRAM)),
-            ("Spool price (EGP)",      "spool_price",
+            ("Spool price",             "spool_price",
              str(SPOOL_PRICE_FIXED)),
-            ("Cost per gram (EGP)",    "default_cost_per_gram",   "0.84"),
-            ("Electricity rate (EGP/hr)", "electricity_rate",     "0.31"),
+            ("Cost per gram",           "default_cost_per_gram",   "0.84"),
+            ("Electricity rate (/ hr)", "electricity_rate",        "0.31"),
         ]
         self._pricing_vars: dict = {}
         for r, (label, key, default) in enumerate(fields):
@@ -159,8 +181,8 @@ class SettingsTab(ttk.Frame):
         sec.columnconfigure(1, weight=1)
 
         fields = [
-            ("Deposit %",         "quote_deposit_pct",      "30"),
-            ("Quote validity (days)", "quote_validity_days","7"),
+            ("Deposit %",             "quote_deposit_pct",   "30"),
+            ("Quote validity (days)", "quote_validity_days", "7"),
             ("Invoice footer note",   "invoice_footer",
              "Thank you for your business!"),
         ]
@@ -189,13 +211,11 @@ class SettingsTab(ttk.Frame):
                    command=self._backup_db).pack(side=tk.LEFT, padx=4)
         ttk.Button(btn_row, text="📤 Export to CSV",
                    command=self._export_csv).pack(side=tk.LEFT, padx=4)
-        ttk.Button(btn_row, text="📥 Import / Migrate v4",
-                   command=self._import_v4).pack(side=tk.LEFT, padx=4)
+        # NOTE: "📥 Import / Migrate v4" button removed in Phase 2 (Task 5)
 
         self._data_status = ttk.Label(sec, text="", style="Muted.TLabel")
         self._data_status.pack(anchor="w", pady=(6, 0))
 
-        # DB path info
         ttk.Label(sec,
                   text=f"Database: {DB_PATH}",
                   style="Muted.TLabel").pack(anchor="w", pady=(4, 0))
@@ -208,10 +228,9 @@ class SettingsTab(ttk.Frame):
         sec.columnconfigure(1, weight=1)
 
         about_rows = [
-            ("App",         f"{APP_NAME} v{APP_VERSION}"),
-            ("Database",    "SQLite (WAL mode)"),
-            ("Python",      self._python_version()),
-            ("Built for",   "Abaad 3D Printing Services, Ismailia, Egypt"),
+            ("App",      f"{APP_NAME} v{APP_VERSION}"),
+            ("Database", "SQLite (WAL mode)"),
+            ("Python",   self._python_version()),
         ]
         for r, (label, value) in enumerate(about_rows):
             ttk.Label(sec, text=f"{label}:",
@@ -263,45 +282,89 @@ class SettingsTab(ttk.Frame):
             value = self._db_get(key) or default
             var.set(value)
 
+        # Load logo path display
+        logo_rel = self._db_get("company_logo_path") or ""
+        self._logo_path_var.set(logo_rel)
+        self._pending_logo = None
+
         self._refresh_db_stats()
 
     def _save_all(self) -> None:
-        """Save all settings to the settings table."""
+        """Batch-save all settings to the settings table in one transaction."""
         all_vars = {
             **self._company_vars,
             **self._pricing_vars,
             **self._quote_vars,
         }
-        saved = 0
+
+        settings_dict: dict = {}
         for key, (var, _) in all_vars.items():
-            value = var.get().strip()
-            self._db_set(key, value)
-            saved += 1
+            settings_dict[key] = var.get().strip()
+
+        # Handle pending logo file copy
+        if self._pending_logo and self._pending_logo.exists():
+            try:
+                ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+                dest = ASSETS_DIR / f"logo_custom{self._pending_logo.suffix}"
+                shutil.copy2(self._pending_logo, dest)
+                logo_rel = str(Path("assets") / dest.name)
+                settings_dict["company_logo_path"] = logo_rel
+                self._logo_path_var.set(logo_rel)
+                self._pending_logo = None
+            except Exception as exc:
+                messagebox.showwarning(
+                    "Logo", f"Could not copy logo:\n{exc}")
+
+        try:
+            ok = self._db.save_all_settings(settings_dict)
+        except Exception as exc:
+            messagebox.showerror("Save Error", str(exc))
+            return
+
+        if not ok:
+            messagebox.showerror("Save Error",
+                                 "save_all_settings() returned False.")
+            return
+
+        # Invalidate currency cache so format_currency picks up new symbol
+        try:
+            from src.utils.helpers import invalidate_currency_cache
+            invalidate_currency_cache()
+        except Exception:
+            pass
 
         messagebox.showinfo("Saved",
-                            f"✅ {saved} settings saved successfully.")
+                            f"✅ {len(settings_dict)} settings saved successfully.")
         self._notify()
 
     def _db_get(self, key: str) -> str:
-        """Read a single key from the settings table."""
         try:
             return self._db.get_setting(key, default="")
         except Exception:
             return ""
 
-    def _db_set(self, key: str, value: str) -> None:
-        """Upsert a key in the settings table."""
-        try:
-            self._db.save_setting(key, value)
-        except Exception as exc:
-            print(f"Settings save error: {exc}")
+    # ------------------------------------------------------------------
+    # Logo picker
+    # ------------------------------------------------------------------
+
+    def _pick_logo(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Choose a logo image",
+            filetypes=[
+                ("Image files", "*.png *.jpg *.jpeg *.gif *.bmp *.ico"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not path:
+            return
+        self._pending_logo = Path(path)
+        self._logo_path_var.set(self._pending_logo.name + " (pending save)")
 
     # ------------------------------------------------------------------
     # Data actions
     # ------------------------------------------------------------------
 
     def _backup_db(self) -> None:
-        """Trigger a database backup."""
         try:
             path = self._db.backup_database()
             self._data_status.config(
@@ -313,13 +376,11 @@ class SettingsTab(ttk.Frame):
                 foreground=Colors.DANGER)
 
     def _export_csv(self) -> None:
-        """Export all tables to CSV files."""
         try:
             export_dir = self._db.export_to_csv()
             self._data_status.config(
                 text=f"✅ CSV files exported to: {export_dir}",
                 foreground=Colors.SUCCESS)
-            # Try to open the folder
             import os, subprocess, sys
             if sys.platform == "win32":
                 os.startfile(str(export_dir))
@@ -330,33 +391,6 @@ class SettingsTab(ttk.Frame):
         except Exception as exc:
             self._data_status.config(
                 text=f"❌ Export failed: {exc}",
-                foreground=Colors.DANGER)
-
-    def _import_v4(self) -> None:
-        """Run the v4 → v5 migration script."""
-        if not messagebox.askyesno(
-            "Import v4 Data",
-            "This will import data from the v4 JSON database "
-            "(data/abaad_v4.db.json).\n\n"
-            "Existing records will NOT be overwritten unless "
-            "you confirm --force mode.\n\n"
-            "Continue?",
-        ):
-            return
-        try:
-            from src.utils.migration import run_migration
-            result = run_migration(force=False)
-            self._data_status.config(
-                text=f"✅ Migration complete: {result}",
-                foreground=Colors.SUCCESS)
-        except ImportError:
-            self._data_status.config(
-                text="❌ Migration module not found. "
-                     "Run scripts/migrate_v4_to_v5.py manually.",
-                foreground=Colors.DANGER)
-        except Exception as exc:
-            self._data_status.config(
-                text=f"❌ Migration failed: {exc}",
                 foreground=Colors.DANGER)
 
     # ------------------------------------------------------------------
